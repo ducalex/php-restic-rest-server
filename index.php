@@ -5,24 +5,27 @@
  */
 define('OBJECT_TYPES', ['data', 'keys', 'locks', 'snapshots', 'index']);
 define('FILE_TYPES', ['config']);
-
-define('APPEND_ONLY', false);   // --append-only
-define('NO_AUTH', false);       // --no-auth
-define('PRIVATE_REPOS', false); // --private-repos
-define('DATA_DIR', './restic'); // --path
+define('CONFIG', ((@include 'config.php') ?: []) + [
+    'AppendOnly' => false,      // --append-only
+    'NoAuth' => false,          // --no-auth
+    'PrivateRepos' => false,    // --private-repos
+    'DataDir' => './restic',    // --path
+]);
 
 [$method, $user, $path, $uri, $query] = parse_request($_SERVER);
 
-if (empty($user) && (PRIVATE_REPOS || !NO_AUTH)) {
+if (empty($user) && (CONFIG['PrivateRepos'] || !CONFIG['NoAuth'])) {
+    respond(401, 'You must be logged in.');
+} elseif (CONFIG['PrivateRepos'] && strpos("$path/", "$user/") !== 0) {
     respond(401, 'You must be logged in.');
 }
 
 if (preg_match('~^(' . implode('|', OBJECT_TYPES) . ')/([a-zA-Z0-9]{64})$~', $uri) || in_array($uri, FILE_TYPES)) {
-    handle_file($method, joinpath($path, $uri));
+    handle_file($method, joinpath(CONFIG['DataDir'], $path, $uri));
 } elseif (in_array($uri, OBJECT_TYPES)) {
-    handle_list($method, joinpath($path, $uri));
+    handle_list($method, joinpath(CONFIG['DataDir'], $path, $uri));
 } elseif ($uri === '') {
-    handle_repo($method, $path, $query);
+    handle_repo($method, joinpath(CONFIG['DataDir'], $path), $query);
 } else {
     respond(400, 'Bad Request');
 }
@@ -31,10 +34,10 @@ function parse_request(array $server)
 {
     $method = strtoupper($server['REQUEST_METHOD']);
     $user = $server['REMOTE_USER'] ?? '';
+    $uri = preg_replace('~/+~', '/', $server['REQUEST_URI']);
     $find = implode('|', array_merge(OBJECT_TYPES, FILE_TYPES));
-    if (preg_match("~^(?<p>.*?)(?<u>/($find)(/.*)?|/)(\?(?<q>.*))?$~", $server['REQUEST_URI'], $m)) {
-        $path = PRIVATE_REPOS ? joinpath(DATA_DIR, $user, $m['p']) : joinpath(DATA_DIR, $m['p']);
-        return [$method, $user, $path, trim($m['u'], '/'), $m['q'] ?? ''];
+    if (preg_match("~^(?<p>.*?)(?<u>/($find)(/.*)?|/)(\?(?<q>.*))?$~", $uri, $m)) {
+        return [$method, $user, $m['p'], trim($m['u'], '/'), $m['q'] ?? ''];
     }
     return [$method, $user, '', '', ''];
 }
@@ -61,7 +64,7 @@ function handle_repo(string $method, string $folderPath, string $query)
     if ($method === 'POST') {
         if ($query === 'create=true') { // create repo
             if (glob("$folderPath/*")) {
-                respond(400, 'Folder not empty');
+                respond(403, 'Folder not empty');
             }
             foreach (OBJECT_TYPES as $type) {
                 mkdir(joinpath($folderPath, $type), 0755, true);
@@ -112,7 +115,7 @@ function handle_file(string $method, string $filePath)
         }
         respond(200);
     } elseif ($method === 'DELETE') {
-        if (APPEND_ONLY) {
+        if (CONFIG['AppendOnly']) {
             respond(403, 'Forbidden');
         } elseif (!file_exists($filePath)) {
             respond(404, 'Not found');

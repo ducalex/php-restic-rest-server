@@ -13,8 +13,8 @@ This project is an implementation of the restic's [REST backend API](https://res
 
 # Usage
 
-Change `DATA_DIR` in the script to the absolute path of where you want the repositories to live. 
-It might be a good idea to put `DATA_DIR` outside of the web root but it's not obligatory.
+Change `DataDir` in the config file to the absolute path of where you want the repositories to live. 
+It might be a good idea to put `DataDir` outside of the web root but it's not obligatory.
 
 NGINX:
 ````
