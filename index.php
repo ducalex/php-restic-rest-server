@@ -69,7 +69,7 @@ function handle_repo(string $method, string $folderPath, string $query)
             respond(200);
         }
     } elseif ($method === 'DELETE') { // delete repo
-        respond(501, 'Not implemented');
+        respond(405, 'Method not allowed');
     } else {
         respond(405, 'Method not allowed');
     }
@@ -98,26 +98,26 @@ function handle_file(string $method, string $filePath)
     }
     if ($method === 'GET' || $method === 'HEAD') {
         if (!is_file($filePath) || !is_readable($filePath)) {
-            respond(404);
+            respond(404, 'Not found');
         }
         $content = $method === 'GET' ? file_get_contents($filePath) : NULL;
         respond(200, $content, ['Content-Length: ' . filesize($filePath)]);
     } elseif ($method === 'POST') {
         @mkdir(dirname($filePath), 0755, true);
         if (!@copy('php://input', $filePath)) { // FIXME: Atomic copy would be nicer...
-            respond(500);
+            respond(500, 'Copy failed');
         } elseif ($is_object && hash_file('sha256', $filePath) !== basename($filePath)) {
             @unlink($filePath);
-            respond(500);
+            respond(500, 'Hash mismatch');
         }
         respond(200);
     } elseif ($method === 'DELETE') {
         if (APPEND_ONLY) {
-            respond(403);
+            respond(403, 'Forbidden');
         } elseif (!file_exists($filePath)) {
-            respond(404);
+            respond(404, 'Not found');
         } elseif (!@unlink($filePath)) {
-            respond(500);
+            respond(500, 'Deletion failed');
         }
         respond(200);
     } else {
