@@ -14,7 +14,7 @@ define('DATA_DIR', './restic'); // --path
 [$method, $user, $path, $uri, $query] = parse_request($_SERVER);
 
 if (empty($user) && (PRIVATE_REPOS || !NO_AUTH)) {
-    respond(401, [], 'You must be logged in.');
+    respond(401, 'You must be logged in.');
 }
 
 if (preg_match('~^(' . implode('|', OBJECT_TYPES) . ')/([a-zA-Z0-9]{64})$~', $uri) || in_array($uri, FILE_TYPES)) {
@@ -24,9 +24,8 @@ if (preg_match('~^(' . implode('|', OBJECT_TYPES) . ')/([a-zA-Z0-9]{64})$~', $ur
 } elseif ($uri === '') {
     handle_repo($method, $path, $query);
 } else {
-    respond(400, [], 'Bad Request');
+    respond(400, 'Bad Request');
 }
-
 
 function parse_request(array $server)
 {
@@ -45,10 +44,12 @@ function joinpath(string ...$parts)
     return rtrim(implode('/', array_filter($parts, 'strlen')), '/');
 }
 
-function respond(int $http_code = 200, array $headers = [], string $content = null)
+function respond(int $http_code = 200, string $content = null, array $headers = [])
 {
     header('Content-Type: application/vnd.x.restic.rest.v1');
-    http_response_code($http_code); // We'll override on errors
+    http_response_code($http_code);
+    if ($content !== null)
+        header('Content-Length: ' . strlen($content));
     foreach ($headers as $header)
         header($header);
     die($content);
@@ -60,7 +61,7 @@ function handle_repo(string $method, string $folderPath, string $query)
     if ($method === 'POST') {
         if ($query === 'create=true') { // create repo
             if (glob("$folderPath/*")) {
-                respond(400, [], 'Folder not empty');
+                respond(400, 'Folder not empty');
             }
             foreach (OBJECT_TYPES as $type) {
                 mkdir(joinpath($folderPath, $type), 0755, true);
@@ -68,9 +69,9 @@ function handle_repo(string $method, string $folderPath, string $query)
             respond(200);
         }
     } elseif ($method === 'DELETE') { // delete repo
-        respond(501, [], 'Not implemented');
+        respond(501, 'Not implemented');
     } else {
-        respond(405, [], 'Method not allowed');
+        respond(405, 'Method not allowed');
     }
 }
 
@@ -83,9 +84,9 @@ function handle_list(string $method, string $filePath)
         foreach (new \RecursiveIteratorIterator($directory) as $file) {
             $files[] = $file->getBasename();
         }
-        respond(200, [], json_encode($files));
+        respond(200, json_encode($files));
     } else {
-        respond(405, [], 'Method not allowed');
+        respond(405, 'Method not allowed');
     }
 }
 
@@ -100,7 +101,7 @@ function handle_file(string $method, string $filePath)
             respond(404);
         }
         $content = $method === 'GET' ? file_get_contents($filePath) : NULL;
-        respond(200, ['Content-Length: ' . filesize($filePath)], $content);
+        respond(200, $content, ['Content-Length: ' . filesize($filePath)]);
     } elseif ($method === 'POST') {
         @mkdir(dirname($filePath), 0755, true);
         if (!@copy('php://input', $filePath)) { // FIXME: Atomic copy would be nicer...
@@ -120,6 +121,6 @@ function handle_file(string $method, string $filePath)
         }
         respond(200);
     } else {
-        respond(405, [], 'Method not allowed');
+        respond(405, 'Method not allowed');
     }
 }
