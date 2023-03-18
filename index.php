@@ -107,7 +107,9 @@ function handle_file(string $method, string $filePath)
         respond(200, $content, ['Content-Length: ' . filesize($filePath)]);
     } elseif ($method === 'POST') {
         @mkdir(dirname($filePath), 0755, true);
-        if (!@copy('php://input', $filePath)) { // FIXME: Atomic copy would be nicer...
+        if (file_exists($filePath)) {
+            respond(403, 'File exists');
+        } elseif (!@copy('php://input', $filePath)) { // FIXME: Atomic copy would be nicer...
             respond(500, 'Copy failed');
         } elseif ($is_object && hash_file('sha256', $filePath) !== basename($filePath)) {
             @unlink($filePath);
