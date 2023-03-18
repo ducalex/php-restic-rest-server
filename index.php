@@ -12,20 +12,20 @@ define('CONFIG', ((@include 'config.php') ?: []) + [
     'DataDir' => './restic',    // --path
 ]);
 
-[$method, $user, $path, $uri, $query] = parse_request($_SERVER);
+[$method, $user, $repo, $uri, $query] = parse_request($_SERVER);
 
 if (empty($user) && (CONFIG['PrivateRepos'] || !CONFIG['NoAuth'])) {
     respond(401, 'You must be logged in.');
-} elseif (CONFIG['PrivateRepos'] && strpos("$path/", "$user/") !== 0) {
+} elseif (CONFIG['PrivateRepos'] && strpos("$repo/", "$user/") !== 0) {
     respond(401, 'You must be logged in.');
 }
 
 if (preg_match('~^(' . implode('|', OBJECT_TYPES) . ')/([a-zA-Z0-9]{64})$~', $uri) || in_array($uri, FILE_TYPES)) {
-    handle_file($method, joinpath(CONFIG['DataDir'], $path, $uri));
+    handle_file($method, joinpath(CONFIG['DataDir'], $repo, $uri));
 } elseif (in_array($uri, OBJECT_TYPES)) {
-    handle_list($method, joinpath(CONFIG['DataDir'], $path, $uri));
+    handle_list($method, joinpath(CONFIG['DataDir'], $repo, $uri));
 } elseif ($uri === '') {
-    handle_repo($method, joinpath(CONFIG['DataDir'], $path), $query);
+    handle_repo($method, joinpath(CONFIG['DataDir'], $repo), $query);
 } else {
     respond(400, 'Bad Request');
 }
@@ -59,15 +59,15 @@ function respond(int $http_code = 200, string $content = null, array $headers = 
 }
 
 // {PATH}
-function handle_repo(string $method, string $folderPath, string $query)
+function handle_repo(string $method, string $path, string $query)
 {
     if ($method === 'POST') {
         if ($query === 'create=true') { // create repo
-            if (glob("$folderPath/*")) {
+            if (glob("$path/*")) {
                 respond(403, 'Folder not empty');
             }
             foreach (OBJECT_TYPES as $type) {
-                mkdir(joinpath($folderPath, $type), 0755, true);
+                mkdir(joinpath($path, $type), 0755, true);
             }
             respond(200);
         }
@@ -79,10 +79,10 @@ function handle_repo(string $method, string $folderPath, string $query)
 }
 
 // {PATH}/{TYPE}
-function handle_list(string $method, string $filePath)
+function handle_list(string $method, string $path)
 {
     if ($method === 'GET') {
-        $directory = new \RecursiveDirectoryIterator($filePath, \RecursiveDirectoryIterator::SKIP_DOTS);
+        $directory = new \RecursiveDirectoryIterator($path, \RecursiveDirectoryIterator::SKIP_DOTS);
         $files = [];
         foreach (new \RecursiveIteratorIterator($directory) as $file) {
             $files[] = $file->getBasename();
@@ -94,34 +94,34 @@ function handle_list(string $method, string $filePath)
 }
 
 // {PATH}/{TYPE}/{NAME} and {PATH}/{NAME}
-function handle_file(string $method, string $filePath)
+function handle_file(string $method, string $path)
 {
-    if ($is_object = preg_match('/^[a-z0-9]{64}$/', basename($filePath))) {
-        $filePath = preg_replace('~/data/((..).{62})$~', '/data/$2/$1', $filePath);
+    if ($is_object = preg_match('/^[a-z0-9]{64}$/', basename($path))) {
+        $path = preg_replace('~/data/((..).{62})$~', '/data/$2/$1', $path);
     }
     if ($method === 'GET' || $method === 'HEAD') {
-        if (!is_file($filePath) || !is_readable($filePath)) {
+        if (!is_file($path) || !is_readable($path)) {
             respond(404, 'Not found');
         }
-        $content = $method === 'GET' ? file_get_contents($filePath) : NULL;
-        respond(200, $content, ['Content-Length: ' . filesize($filePath)]);
+        $content = $method === 'GET' ? file_get_contents($path) : NULL;
+        respond(200, $content, ['Content-Length: ' . filesize($path)]);
     } elseif ($method === 'POST') {
-        @mkdir(dirname($filePath), 0755, true);
-        if (file_exists($filePath)) {
+        @mkdir(dirname($path), 0755, true);
+        if (file_exists($path)) {
             respond(403, 'File exists');
-        } elseif (!@copy('php://input', $filePath)) { // FIXME: Atomic copy would be nicer...
+        } elseif (!@copy('php://input', $path)) { // FIXME: Atomic copy would be nicer...
             respond(500, 'Copy failed');
-        } elseif ($is_object && hash_file('sha256', $filePath) !== basename($filePath)) {
-            @unlink($filePath);
+        } elseif ($is_object && hash_file('sha256', $path) !== basename($path)) {
+            @unlink($path);
             respond(500, 'Hash mismatch');
         }
         respond(200);
     } elseif ($method === 'DELETE') {
         if (CONFIG['AppendOnly']) {
             respond(403, 'Forbidden');
-        } elseif (!file_exists($filePath)) {
+        } elseif (!file_exists($path)) {
             respond(404, 'Not found');
-        } elseif (!@unlink($filePath)) {
+        } elseif (!@unlink($path)) {
             respond(500, 'Deletion failed');
         }
         respond(200);
