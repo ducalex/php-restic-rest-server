@@ -9,6 +9,7 @@ This project is an implementation of the restic's [REST backend API](https://res
 | Append only   | Yes       | Yes            |
 | Private repos | Yes       | Yes            |
 | Metrics       | Yes       | No             |
+| Quota         | Yes       | No             |
 
 
 # Usage
