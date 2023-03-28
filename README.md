@@ -4,7 +4,7 @@ This project is an implementation of the restic's [REST backend API](https://res
 
 |Feature        |restic/rest-server|restic-rest-php|
 |---------------|-----------|---------------|
-| Auth          | Yes (.htpasswd) | Yes (web server) |
+| Auth          | Yes (.htpasswd) | Yes |
 | TLS           | Yes       | Yes (web server) |
 | Append only   | Yes       | Yes            |
 | Private repos | Yes       | Yes            |
@@ -20,7 +20,7 @@ It might be a good idea to put `DataDir` outside of the web root but it's not ob
 NGINX:
 ````
 location / {
-    rewrite ^(.*)$ /index.php?$1 last;
+    rewrite ^(.*)$ /index.php last;
 }
 ````
 

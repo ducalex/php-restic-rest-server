@@ -6,18 +6,19 @@
 define('OBJECT_TYPES', ['data', 'keys', 'locks', 'snapshots', 'index']);
 define('FILE_TYPES', ['config']);
 define('CONFIG', ((@include 'config.php') ?: []) + [
+    'BaseURL' => '/',           // Base to ignore
+    'Users' => [],              // HTTP users when NoAuth is false
     'AppendOnly' => false,      // --append-only
     'NoAuth' => false,          // --no-auth
     'PrivateRepos' => false,    // --private-repos
     'DataDir' => './restic',    // --path
-    'Users' => [],
 ]);
 
 [$method, $user, $repo, $uri, $query] = parse_request($_SERVER);
 
 if (!CONFIG['NoAuth'] || CONFIG['PrivateRepos']) {
-    if (empty($user)) {
-        respond(401, 'You must be logged in.');
+    if ($user === null) {
+        respond(401, 'You must be logged in.', ['WWW-Authenticate: Basic realm="restic-rest"']);
     } elseif (CONFIG['PrivateRepos'] && strpos("$repo/", "$user/") !== 0) {
         respond(403, 'You do not have access to this path.');
     }
@@ -35,12 +36,19 @@ if (preg_match('~^(' . implode('|', OBJECT_TYPES) . ')/([a-zA-Z0-9]{64})$~', $ur
 
 function parse_request(array $server)
 {
+    $user = null;
+    if (isset($server['PHP_AUTH_USER'], $server['PHP_AUTH_PW'])) {
+        $hash = CONFIG['Users'][$server['PHP_AUTH_USER']] ?? null;
+        if ($server['PHP_AUTH_PW'] === $hash || @password_verify($server['PHP_AUTH_PW'], $hash)) {
+            $user = $server['PHP_AUTH_USER'];
+        }
+    }
     $method = strtoupper($server['REQUEST_METHOD']);
-    $user = $server['REMOTE_USER'] ?? '';
     $uri = preg_replace('~/+~', '/', $server['REQUEST_URI']);
+    $base = preg_quote(rtrim(CONFIG['BaseURL'], '/'));
     $find = implode('|', array_merge(OBJECT_TYPES, FILE_TYPES));
-    if (preg_match("~^(?<p>.*?)(?<u>/($find)(/.*)?|/)(\?(?<q>.*))?$~", $uri, $m)) {
-        return [$method, $user, $m['p'], trim($m['u'], '/'), $m['q'] ?? ''];
+    if (preg_match("~^($base)(?<p>.*?)(?<u>/($find)(/.*)?|/)(\?(?<q>.*))?$~", $uri, $m)) {
+        return [$method, $user, trim($m['p'], '/'), trim($m['u'], '/'), $m['q'] ?? ''];
     }
     return [$method, $user, '', '', ''];
 }
