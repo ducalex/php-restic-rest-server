@@ -1,7 +1,11 @@
 <?php
+// Example config file
 return [
     'AppendOnly' => false,
-    'NoAuth' => true,
-    'PrivateRepos' => false,
-    'DataDir' => __DIR__ . '/restic',
+    'NoAuth' => false,
+    'PrivateRepos' => true,
+    'DataDir' => '/data/restic',
+    'Users' => [
+        'user' => 'pass'
+    ],
 ];

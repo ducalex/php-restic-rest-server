@@ -10,14 +10,17 @@ define('CONFIG', ((@include 'config.php') ?: []) + [
     'NoAuth' => false,          // --no-auth
     'PrivateRepos' => false,    // --private-repos
     'DataDir' => './restic',    // --path
+    'Users' => [],
 ]);
 
 [$method, $user, $repo, $uri, $query] = parse_request($_SERVER);
 
-if (empty($user) && (CONFIG['PrivateRepos'] || !CONFIG['NoAuth'])) {
-    respond(401, 'You must be logged in.');
-} elseif (CONFIG['PrivateRepos'] && strpos("$repo/", "$user/") !== 0) {
-    respond(401, 'You must be logged in.');
+if (!CONFIG['NoAuth'] || CONFIG['PrivateRepos']) {
+    if (empty($user)) {
+        respond(401, 'You must be logged in.');
+    } elseif (CONFIG['PrivateRepos'] && strpos("$repo/", "$user/") !== 0) {
+        respond(403, 'You do not have access to this path.');
+    }
 }
 
 if (preg_match('~^(' . implode('|', OBJECT_TYPES) . ')/([a-zA-Z0-9]{64})$~', $uri) || in_array($uri, FILE_TYPES)) {
